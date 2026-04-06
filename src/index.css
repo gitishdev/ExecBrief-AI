@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+.pdf-exporting .print\:hidden {
+  display: none !important;
+}
+.pdf-exporting .hidden.print\:block {
+  display: block !important;
+}
+.pdf-exporting .hidden.print\:flex {
+  display: flex !important;
+}
+
+@media print {
+  body.printing-summary * {
+    visibility: hidden;
+  }
+  body.printing-summary .print-target, 
+  body.printing-summary .print-target * {
+    visibility: visible;
+  }
+  body.printing-summary .print-target {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  @page {
+    margin: 0.75in;
+  }
+}
