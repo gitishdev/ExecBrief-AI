@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Youtube, Loader2, Plus, X, AlertCircle } from 'lucide-react';
+import { Youtube, Loader2, Plus, X, AlertCircle, Clock, ArrowLeft, Trash2 } from 'lucide-react';
+import LZString from 'lz-string';
 import { synthesizeVideo } from './lib/gemini';
-import { getStoredSummary, storeSummary } from './lib/storage';
+import { getStoredSummary, storeSummary, getAllStoredSummaries, deleteStoredSummary, VideoSummary } from './lib/storage';
 import { SummaryCard } from './components/SummaryCard';
 
 export default function App() {
@@ -15,6 +16,55 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [results, setResults] = useState<{ url: string; summary: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const [currentView, setCurrentView] = useState<'home' | 'history'>('home');
+  const [historyItems, setHistoryItems] = useState<VideoSummary[]>([]);
+
+  const loadHistory = () => {
+    setHistoryItems(getAllStoredSummaries());
+  };
+
+  const handleViewHistory = () => {
+    loadHistory();
+    setCurrentView('history');
+  };
+
+  const handleViewSummary = (item: VideoSummary) => {
+    setResults([{ url: item.url, summary: item.summary }]);
+    setCurrentView('home');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteHistory = (url: string) => {
+    deleteStoredSummary(url);
+    loadHistory();
+    setResults(prev => prev.filter(r => r.url !== url));
+  };
+
+  useEffect(() => {
+    // Check for shared summary in URL
+    const params = new URLSearchParams(window.location.search);
+    const shareToken = params.get('share');
+    
+    if (shareToken) {
+      try {
+        const decompressed = LZString.decompressFromEncodedURIComponent(shareToken);
+        if (decompressed) {
+          const data = JSON.parse(decompressed);
+          if (data.url && data.summary) {
+            setResults([{ url: data.url, summary: data.summary }]);
+            // Also save it locally so they have it cached
+            storeSummary(data.url, data.summary);
+            // Clean up the URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to parse share link", err);
+        setError("Invalid or expired share link.");
+      }
+    }
+  }, []);
 
   const handleUrlChange = (index: number, value: string) => {
     const newUrls = [...urls];
@@ -75,21 +125,97 @@ export default function App() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 print:hidden">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div 
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setCurrentView('home')}
+          >
             <div className="bg-slate-900 p-2 rounded-lg">
               <Youtube className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-xl tracking-tight">ExecBrief AI</span>
           </div>
-          <div className="text-sm font-medium text-slate-500">
-            Executive Synthesis
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={currentView === 'history' ? () => setCurrentView('home') : handleViewHistory}
+              className="inline-flex items-center text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              {currentView === 'history' ? (
+                <>
+                  <ArrowLeft className="w-4 h-4 mr-1.5" />
+                  Back to Home
+                </>
+              ) : (
+                <>
+                  <Clock className="w-4 h-4 mr-1.5" />
+                  History
+                </>
+              )}
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 print:p-0">
-        {/* Hero Section */}
-        <div className="text-center max-w-2xl mx-auto mb-12 print:hidden">
+        {currentView === 'history' ? (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-slate-900">Your History</h2>
+              <p className="text-slate-600 mt-2">Previously generated executive summaries.</p>
+            </div>
+
+            {historyItems.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+                <Clock className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-slate-900">No history yet</h3>
+                <p className="text-slate-500 mt-1">Summaries you generate will appear here.</p>
+                <button 
+                  onClick={() => setCurrentView('home')}
+                  className="mt-6 inline-flex items-center px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  Generate a Synthesis
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {historyItems.map((item) => {
+                  const firstLine = item.summary.split('\n').find(line => line.trim().length > 0) || item.url;
+                  const title = firstLine.replace(/^#+\s*/, '').replace(/\*\*/g, '');
+                  
+                  return (
+                    <div key={item.url} className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:shadow-sm transition-shadow">
+                      <div className="flex-grow min-w-0">
+                        <h4 className="font-semibold text-slate-900 truncate">{title}</h4>
+                        <div className="flex items-center text-sm text-slate-500 mt-1 gap-3">
+                          <span className="truncate max-w-[200px] sm:max-w-xs">{item.url}</span>
+                          <span>•</span>
+                          <span>{new Date(item.timestamp).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => handleViewSummary(item)}
+                          className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 text-sm font-medium rounded-lg transition-colors"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleDeleteHistory(item.url)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          aria-label="Delete from history"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Hero Section */}
+            <div className="text-center max-w-2xl mx-auto mb-12 print:hidden">
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl mb-4">
             Distill hours of video into minutes of insight.
           </h1>
@@ -121,7 +247,7 @@ export default function App() {
                         onChange={(e) => handleUrlChange(index, e.target.value)}
                         placeholder="https://www.youtube.com/watch?v=..."
                         className="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-shadow"
-                        required={index === 0 && urls.length === 1}
+                        required={index === 0 && urls.length === 1 && results.length === 0}
                       />
                     </div>
                     {urls.length > 1 && (
@@ -198,6 +324,8 @@ export default function App() {
               </motion.div>
             ))}
           </div>
+        )}
+          </>
         )}
       </main>
     </div>

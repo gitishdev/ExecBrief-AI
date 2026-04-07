@@ -9,6 +9,7 @@ Please analyze the following YouTube video: ${url}
 Provide a synthesis of the video. The output MUST be formatted in Markdown.
 To save space, do NOT use a list for the metadata. Format the output EXACTLY using the following structure:
 
+# [Video Title]
 **[Channel Name]** • [Upload Date] • [Duration]
 
 ### Speakers
@@ -20,7 +21,7 @@ To save space, do NOT use a list for the metadata. Format the output EXACTLY usi
 ### Key Takeaways
 [The top insights, strategic takeaways, and actionable advice discussed in the video. Use bullet points.]
 
-### Tactical Details
+### Actionable Insights
 [Specific, actionable nuances, step-by-step methods, configurations, or granular advice (e.g., specific file structures, methodologies, tools, or frameworks mentioned in the video that someone could immediately implement). Use bullet points.]
 
 Constraints:
